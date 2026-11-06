@@ -1,180 +1,167 @@
-# Informe final QA & Security: sprint W1 + W2 (post-ejecución)
+# Informe final de QA & Security: Sprint 1, W1 y W2 (posterior a la ejecución)
 
-Fecha: 2026-11-06. Rama de QA: `qa-security`. Comando configurado: `python tools/wallee.py test`. Estado de la ejecución: **FALLÓ** (código de salida 1, 24,9 s).
+**Fecha:** 2026-11-06. **Rama de QA:** `qa-security` (según el mapa; la app en disco ya está en esa rama).
+**Comando configurado:** `python tools/wallee.py test`. **Código de salida:** 1. **Duración:** 9,5 s. **Error de ejecución:** ninguno.
 
-Este informe resume solo lo que demuestra la salida real recibida. No se regeneran ni modifican tests. No se afirma que commit, push o PR hayan ocurrido: esa publicación es un paso separado.
+No se generan ni modifican archivos de prueba en esta tarea. No se afirma que commit, push o PR hayan ocurrido: esa publicación es un paso separado.
 
 ---
 
-## 1. Qué demuestra la salida real
+## 1. Resumen ejecutivo
 
-### 1.1 Totales reportados
+- La suite **falló** (estado FALLÓ, código 1).
+- La salida real aportada está **truncada** (se muestra solo el final). Solo muestra dos archivos de prueba:
+  - `test/app.e2e-spec.ts`: aparece como superado (el resumen indica 1 suite superada). La salida truncada no muestra su nombre completo.
+  - `test/onboarding.e2e-spec.ts`: **FAIL**.
+- Resumen del ejecutor: **Test Suites: 1 failed, 1 passed, 2 total. Tests: 14 failed, 2 todo, 2 passed, 18 total.**
+- Causa común de los 14 fallos visibles: `POST /onboarding` respondió **404** donde se esperaba **201** (helper `crearOnboarding`, `onboarding.e2e-spec.ts:38`). Es consistente con que el módulo de onboarding no está expuesto en la app. En disco solo existe el módulo `health`, y esto confirma el riesgo del borrador. Es una observación a verificar por el dueño del código, no un diagnóstico confirmado.
+- **Hallazgo importante sobre la ejecución:** los tests que corrieron pertenecen a `test/onboarding.e2e-spec.ts`, un archivo que ya existía en la app (con casos nombrados `W1-AC1-T2 [EP] inicio lista los pasos propuestos...`). **Los archivos `onboarding-qa.e2e-spec.ts` y `payments-qa.e2e-spec.ts` del borrador de QA no aparecen en la salida**. Puede deberse a la truncación o a que no se copiaron o no se ejecutaron. No hay evidencia de que se hayan ejecutado, así que sus casos **permanecen NO EJECUTADO**.
+- Ningún AC de W1 o W2 puede declararse verificado. Los AC de W1 observados quedan **EJECUTADO-FALLÓ** (por el 404 anterior). W2 queda **NO EJECUTADO**.
 
-| Medida | Valor |
-|---|---|
-| Suites | 2 totales: 1 fallida, 1 aprobada |
-| Tests | 18 totales: 14 fallidos, 2 `todo`, 2 aprobados |
-| Duración Jest | 8,124 s |
+---
 
-### 1.2 Limitaciones de la salida
+## 2. Inventario de alcance (sin cambios respecto al borrador)
 
-- La salida llegó **truncada**: solo se ve el final. Aparece el nombre `e2e-spec.ts (7.315 s)` sin prefijo y el bloque `FAIL test/onboarding.e2e-spec.ts`.
-- Los 14 fallos y los títulos visibles pertenecen a `test/onboarding.e2e-spec.ts`, el archivo previo de autor no identificado. Sus nombres («W1 onboarding — API de integración») no coinciden con los de mis archivos (`W1 Onboarding guiado (QA)`).
-- La suite aprobada es probablemente `test/app.e2e-spec.ts` (health), pero la salida truncada no lo demuestra con certeza.
-- **No hay evidencia de que mis archivos se ejecutaran.** Los totales de 18 tests y 2 `todo` son compatibles con una suite de 16 tests más 2 `todo`, y mis archivos emitidos tienen muchos más casos y 8 `todo`. Es posible que `w1-onboarding-qa.e2e-spec.ts`, `w2-pago-bajo-monto-qa.e2e-spec.ts` y `support/qa-helpers.ts` no estuvieran en el destino o que el patrón de Jest no los tomara. Es una hipótesis, no un hecho demostrado.
-- No se aportó salida de cobertura: **cobertura (meta 85 %): NO EJECUTADO / no verificable**.
-- No hubo ejecución de frontend, E2E por URL, `npm audit`, eslint-plugin-security, gitleaks ni `python -m unittest discover -s tests`.
-
-### 1.3 Resultado por caso visible
-
-Cada fallo muestra el mismo patrón: `Expected: 201, Received: 404` en el helper `crearOnboarding` (`onboarding.e2e-spec.ts:38`), al llamar a `POST /onboarding` con cuerpo `{}`.
-
-| Caso (título en la salida) | Resultado demostrado | Causa que muestra la salida |
+| HU | Estado | Fuente |
 |---|---|---|
-| W1-AC1-T2 [EP] inicio lista los pasos propuestos y marca datos como actual | EJECUTADO-FALLÓ | `POST /onboarding` → 404 |
-| W1-AC1-T2 [ST] completar datos actualiza el paso actual | EJECUTADO-FALLÓ | ídem |
-| W1-AC1-T3 [ST] paso fuera de orden devuelve 409 y no cambia el progreso | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T2 [EP/BVA] nombre vacío | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T2 [EP/BVA] celular ausente | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T2 [EP/BVA] celular de 8 dígitos | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T2 [EP/BVA] celular de 10 dígitos | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T2 [EP/BVA] celular de 9 dígitos que no empieza en 9 | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T3 [EP/BVA] documento de 7 dígitos | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T3 [EP/BVA] documento de 9 dígitos | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T3 [EP/BVA] documento alfanumérico | EJECUTADO-FALLÓ | ídem |
-| W1-AC2-T3 [EP/ST] OTP incorrecto permite reintentar sin activar la wallet | EJECUTADO-FALLÓ | ídem |
-| W1-AC3-T3 [ST] wallet incompleta permanece pendiente | EJECUTADO-FALLÓ | ídem |
-| W1-AC3-T2 [ST] wallet se activa solo tras completar los tres pasos | EJECUTADO-FALLÓ | ídem |
+| W1 (AC1–AC4, verificación simulada) | PARCIAL | spec + discovery |
+| W2 (AC1–AC4, AC6 PARCIAL) | PARCIAL | spec + discovery |
+| W3, W4, W5, W6 | FUERA DEL ALCANCE DEL SPRINT | — |
+| W1-AC5, W1-AC6, W2-AC5 (KPI) | No se prueban (RN-17) | — |
 
-Los 2 tests aprobados y los 2 `todo` no pueden identificarse por nombre con la salida recibida. Quedan **no identificables**.
+Las discrepancias spec/discovery y las decisiones pendientes del borrador siguen vigentes (sección 7).
 
 ---
 
-## 2. Interpretación y honestidad
+## 3. Resultados verificables por caso (solo lo que demuestra la salida)
 
-- Los 14 fallos son consistentes con la observación previa (OBS-01): el backend en disco solo tenía el módulo `health`, y la salida confirma que `POST /onboarding` responde 404. La ruta no existe o no está registrada en la app que crea el test.
-- Esto **no es todavía un BUG-xx confirmado de lógica**, sino el T1 de W1 (AI Engineer 1) sin entregar o sin integrar en `AppModule`. Se reporta como bloqueo, no como defecto de comportamiento. Sigue vigente OBS-02: si la ruta existe pero el prefijo o la configuración global solo están en `main.ts`, el test sin puerto daría el mismo 404.
-- Una suite fallida no significa que todos los AC fallaron ni que pasaron: ningún AC de W1 ni de W2 queda verificado como cumplido.
-- Ningún caso de W2 aparece en la salida visible. Todos quedan **NO EJECUTADO**.
+Los nombres provienen de la salida real, del archivo `test/onboarding.e2e-spec.ts`. Todos los fallos tienen la misma causa visible: `Expected: 201 / Received: 404` en `crearOnboarding` (línea 38).
+
+| Caso (nombre en la salida) | AC / tarea | Resultado real |
+|---|---|---|
+| W1-AC1-T2 [EP] inicio lista los pasos propuestos y marca datos como actual | W1-AC1, 3.1 | **EJECUTADO-FALLÓ** (404 en lugar de 201) |
+| W1-AC1-T2 [ST] completar datos actualiza el paso actual | W1-AC1 | **EJECUTADO-FALLÓ** (404) |
+| W1-AC1-T3 [ST] paso fuera de orden devuelve 409 y no cambia el progreso | 3.3 | **EJECUTADO-FALLÓ** (falló en la creación del onboarding, no llegó a verificar el 409) |
+| W1-AC2-T2 [EP/BVA] nombre vacío bloquea el avance | W1-AC2 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T2 [EP/BVA] celular ausente | W1-AC2 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T2 [EP/BVA] celular de 8 dígitos | W1-AC2, RN-04 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T2 [EP/BVA] celular de 10 dígitos | W1-AC2, RN-04 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T2 [EP/BVA] celular de 9 dígitos que no empieza en 9 | W1-AC2, RN-04 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T3 [EP/BVA] documento de 7 dígitos | W1-AC2 (PROPUESTO) | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T3 [EP/BVA] documento de 9 dígitos | W1-AC2 (PROPUESTO) | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T3 [EP/BVA] documento alfanumérico | W1-AC2 (PROPUESTO) | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC2-T3 [EP/ST] OTP incorrecto permite reintentar sin activar la wallet | W1-AC2, 2.2 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC3-T3 [ST] wallet incompleta permanece pendiente | W1-AC3, RN-10 | **EJECUTADO-FALLÓ** (404 previo) |
+| W1-AC3-T2 [ST] wallet se activa solo tras completar los tres pasos | W1-AC3, RN-10 | **EJECUTADO-FALLÓ** (404 previo) |
+
+**Total de fallos nombrados: 14**, que coincide con el resumen del ejecutor.
+
+**Casos superados y `todo`:**
+- El resumen indica **2 pruebas superadas y 2 `todo`**. La salida truncada **no permite identificar cuáles son**. Pueden pertenecer a `app.e2e-spec.ts` (por ejemplo, salud) o a `onboarding.e2e-spec.ts`. Esos casos se conservan como **no identificables**; no se atribuye aprobación a ningún AC.
+- W1-AC4-T2 (eventos), 2.1-T2 (arranque y tablas) y 2.2-T2 (OTP correcto o distinto): **no aparecen por nombre** en la salida visible. Quedan **NO EJECUTADO / no identificable**.
+
+**Nota sobre el 2.1 (arranque):** la app arrancó y los tests corrieron con la app creada en la prueba, pero la salida no demuestra que las tablas de `Onboarding`, `Wallet` y `OnboardingEvent` existan. La tarea 2.1 **no se puede dar por verificada**.
 
 ---
 
-## 3. Estado de los casos propuestos por mí
+## 4. Casos NO EJECUTADO (sin evidencia en la salida)
 
-| Grupo | Estado tras la ejecución |
+| Grupo | Estado |
 |---|---|
-| `w1-onboarding-qa.e2e-spec.ts` (W1-AC1 a AC3, 2.2, 3.1 a 3.3, 4.1, 4.2, EG hostiles) | NO EJECUTADO (no hay evidencia de que se haya corrido) |
-| `w2-pago-bajo-monto-qa.e2e-spec.ts` (W2-AC1 a AC4, AC6) | NO EJECUTADO |
-| W1-AC4-T2/T3 y W2-AC6-T2/T3 (`it.todo`, DR-01) | NO EJECUTADO, BLOQUEADOS por contrato de consulta de eventos |
-| Frontend, E2E por URL (7.1), seguridad (`npm audit`, gitleaks, eslint-security), Crew | NO EJECUTADO |
-
----
-
-## 4. Actualización del plan y la evidencia (resumen)
-
-La evidencia de la ejecución ya está registrada en `test/evidence.md`; aquí solo se resume.
-
-| HU | AC | Resultado real demostrado | Estado |
-|---|---|---|---|
-| W1 | AC1 | 3 casos del archivo previo EJECUTADO-FALLÓ (404 en `POST /onboarding`) | Rojo; mis casos NO EJECUTADO |
-| W1 | AC2 | 8 casos del archivo previo EJECUTADO-FALLÓ (404) | Rojo |
-| W1 | AC3 | 2 casos del archivo previo EJECUTADO-FALLÓ (404) | Rojo |
-| W1 | AC4 | Sin caso ejecutado | BLOQUEADO (DR-01) |
-| W2 | AC1 a AC4, AC6 | Sin caso ejecutado | NO EJECUTADO |
-
-Commit y PR: no hay confirmación; se dejan en «—».
+| Archivo `onboarding-qa.e2e-spec.ts` completo (todos sus casos, incluidos SEC-03/04/05, W1-AC4-T2 y 2.2) | NO EJECUTADO |
+| Archivo `payments-qa.e2e-spec.ts` completo (W2-AC1 a AC4, AC6 PARCIAL, BVA de monto, escenarios del mock, callback) | NO EJECUTADO |
+| Pruebas unitarias directas del mock de identidad (2.2) | NO EJECUTADO (ruta por definir) |
+| Componentes de frontend (6.1 a 6.3, 5.1 a 5.4) y comando `python tools/wallee.py test frontend` | NO EJECUTADO |
+| Recorrido E2E por navegador (7.1) | NO EJECUTADO (sin MCP) |
+| `npm audit`, eslint-plugin-security, gitleaks | NO EJECUTADO (los ejecuta la persona) |
+| Crew (`python -m unittest discover -s tests`, SEC-07/08) | NO EJECUTADO (fuera del sprint) |
+| Cobertura (meta 85 %) | **No informada** en la salida visible: no se declara ningún valor |
 
 ---
 
 ## 5. Hallazgos
 
-| ID | HU/AC | Severidad | Dueño | Estado |
-|---|---|---|---|---|
-| BUG-01 (candidato, por confirmar) | W1-AC1/AC2/AC3 | Alta | AI Engineer 1 (con Architect) | Pasos: ejecutar `python tools/wallee.py test backend` y `POST /onboarding` con cuerpo `{}`. Esperado: `201` con `onboardingId`, `walletId`, tres pasos y `currentStep=datos` (spec W1, tarea 3.1). Obtenido: `404` (`onboarding.e2e-spec.ts:38`, 14 casos fallidos). Evidencia: salida del ejecutor de `main.py`. Aún no distingue entre módulo no implementado y módulo no registrado: hay que confirmar con el dueño. |
-| OBS-02 | W1/W2 | Media | Architect | Sin cambios: la configuración global (prefijo, pipes, filtros) debería compartirse con los tests. |
-| OBS-04 | QA | Media | QA / persona | La salida no demuestra que mis archivos se copiaron o se descubrieron. Verificar su presencia en `backend/test/` y el patrón de Jest. |
+| Campo | BUG-01 |
+|---|---|
+| **ID** | BUG-01 |
+| **HU/AC** | W1-AC1 a W1-AC3 (3.1, 3.2, 4.1) |
+| **Severidad** | Alta (invalida el flujo de W1 y bloquea W2 por RN-10) |
+| **Dueño** | AI Engineer 1 (endpoints); AI Engineer 2 (módulo y entidades, 2.1); Architect (cableado en `AppModule`) |
+| **Pasos** | Ejecutar `python tools/wallee.py test`; el test `W1-AC1-T2 [EP] inicio lista los pasos propuestos y marca datos como actual` hace `POST /onboarding` con `{}` |
+| **Esperado** | `201` con `onboardingId`, `walletId`, tres pasos y `currentStep = datos` |
+| **Obtenido** | `404` (`Expected: 201 / Received: 404`, `onboarding.e2e-spec.ts:38`) en 14 casos |
+| **Evidencia** | Comando `python tools/wallee.py test`, código de salida 1, resumen `Tests: 14 failed, 2 todo, 2 passed, 18 total` |
+
+Causa probable, **no confirmada**: la ruta `/onboarding` no está registrada. No se leyó el código; se pide al dueño que la confirme.
+
+**Riesgos del borrador (siguen sin verificar):**
+- RIESGO-01: campos extra que activen la wallet (mass assignment). NO EJECUTADO.
+- RIESGO-02: montos hostiles en pagos con 5xx. NO EJECUTADO.
+- RIESGO-03: `ValidationPipe` solo en `main.ts`. NO EJECUTADO. Es relevante porque, tras resolver el 404, los casos de 400 podrían fallar por esto.
 
 ---
 
-## 6. Estado por HU
+## 6. Evidencia y trazabilidad
+
+El resultado real quedó registrado en `test/evidence.md`. Resumen por HU:
+
+| HU | AC / tarea | Resultado | Commit | PR |
+|---|---|---|---|---|
+| W1 | W1-AC1, AC2, AC3 (casos del archivo existente) | EJECUTADO-FALLÓ (404 en `POST /onboarding`) | pendiente | pendiente |
+| W1 | W1-AC4 (eventos) | NO EJECUTADO / no identificable | pendiente | pendiente |
+| W1 | 2.1 (tablas) | No verificado | pendiente | pendiente |
+| W1 | 2.2 (mock de identidad) | No verificado (el único caso nombrado de OTP falló por el 404) | pendiente | pendiente |
+| W2 | AC1, AC2, AC3, AC4, AC6 | NO EJECUTADO | pendiente | pendiente |
+
+Para la matriz de trazabilidad (7.2): **no se puede marcar ninguna fila como verde**.
+
+---
+
+## 7. Estado por HU, tareas y checkpoint
 
 | HU | Estado | Motivo |
 |---|---|---|
-| W1 | **PARCIAL, checkpoint ROJO** | Los casos ejecutados fallan por 404 en `POST /onboarding`; AC4 bloqueado; AC5/AC6 diferidos. |
-| W2 | **PARCIAL, checkpoint ROJO/pendiente** | Sin ningún caso ejecutado; AC6 parcial por definición y bloqueado. |
+| W1 | **PARCIAL**, checkpoint 🔴 **rojo** | Los casos observados de AC1 a AC3 fallan. AC4 no demostrado. Pasos, campos, documento de 8 dígitos y OTP `123456` siguen PENDIENTE DE CONFIRMAR. |
+| W2 | **PARCIAL**, checkpoint 🔴 **rojo / no demostrable** | Sin ejecución de sus casos. Depende de W1 (RN-10) y de fixtures. AC6 es PARCIAL por spec. |
 | W3, W4, W5, W6 | FUERA DEL ALCANCE DEL SPRINT | — |
 
-Reportar al AI Engineer 1 (BUG-01), al Architect (registro de módulos y configuración global) y al PO (estado de las HU). La hora límite de W1 era 11:15 y la de W2 11:45.
+**Tareas propias de QA (tasks.md):** todas siguen **pendientes** o **bloqueadas por 2.1/3.x/4.x** (código ausente). No se marca ninguna como hecha.
 
-### Tareas de `tasks.md`
+**Reporte a:** AI Engineer 1/2 (BUG-01), Architect y Product Owner (checkpoint rojo).
 
-| Tarea | Estado |
+---
+
+## 8. Seguridad (SEC-01..SEC-09)
+
+| ID | Estado tras la ejecución |
 |---|---|
-| W1 2.2, 3.1, 3.2, 3.3, 4.1, 4.2 | Pendiente: la salida no demuestra verde; no se marcan |
-| W1 5.1, W2 4.5 | Bloqueadas (DR-01) |
-| W1 6.1 a 6.3, W2 5.1 a 5.4 | Pendiente (sin archivo, DR-04) |
-| W1 7.1/7.2, W2 7.1/7.2 | Pendiente: sin recorrido ni matriz completa |
-| W1 1.1, 1.2 (Architect) | No son de QA; no se marcan |
+| SEC-01 | NO EJECUTADO (gitleaks o búsqueda por patrones pendientes) |
+| SEC-02 | Los tests usan datos sintéticos (revisión documental) |
+| SEC-03 | NO EJECUTADO |
+| SEC-04 | NO EJECUTADO (el 404 no mostró stack trace en la salida visible, pero no es una verificación del control) |
+| SEC-05 | NO EJECUTADO |
+| SEC-06 | NO PROBABLE: falta insumo (no hay autenticación en el MVP) |
+| SEC-07 / SEC-08 | Fuera del sprint |
+| SEC-09 | Cumplido: solo se citan resultados presentes en la salida real |
 
 ---
 
-## 7. Checklist previo al Freeze
+## 9. Decisiones requeridas (pendientes, sin cambios)
 
-| Ítem | Estado |
-|---|---|
-| Tests con salida real | Ejecución parcial y fallida; sin verde |
-| Cobertura (85 %) | No verificable |
-| Evidencia | Registrada (ejecución fallida) |
-| Matriz de trazabilidad (7.2) | Sin filas con test en verde |
-| README, diagrama, instrucciones | Pendiente (Presenter) |
-| Código en GitHub | Pendiente: no se afirma publicación |
-| Trade-offs | Ver abajo |
-
-### Aporte a README, sección 6 «Evidencia y pruebas»
-
-- Pruebas API de caja negra con Jest y Supertest, datos sintéticos, técnicas EP/BVA/DT/ST/EG.
-- Primera ejecución real: suite fallida (14 fallos, 2 aprobados, 2 `todo`); `POST /onboarding` respondió 404 en todos los fallos visibles.
-- Ninguna HU está verificada como cumplida.
-
-### Aporte a README, sección 7 «Trade-offs y deuda conocida»
-
-- Sin verificación de W2 ni de los eventos (W1-AC4, W2-AC6) hasta definir el contrato de consulta.
-- Sin pruebas de frontend, E2E por URL, autorización (SEC-06), dependencias ni cobertura.
-- Mínimo de monto, código de wallet no activa y pago a uno mismo siguen sin definir.
-- No se probó nada de W4/W5.
+- **DECISIÓN REQUERIDA** — Categoría: alto impacto | Contexto: W1/W2, checkpoint rojo por BUG-01 | Opciones: A) corregir el registro del módulo de onboarding y reejecutar B) recortar alcance de W2 hasta que W1 esté en verde | Recomendación: A | Impacto: sin W1 no hay wallet ACTIVA ni pago | Pregunta a: Product Owner / AI Engineer 1.
+- **DECISIÓN REQUERIDA** — Categoría: ambigüedad | Contexto: ejecución | Opciones: A) confirmar si `onboarding-qa.e2e-spec.ts` y `payments-qa.e2e-spec.ts` se copiaron a `backend/test/` y reejecutar mostrando la salida completa B) conservar solo el archivo existente | Recomendación: A | Impacto: hoy casi todos los casos del borrador siguen NO EJECUTADO | Pregunta a: la persona operadora / Architect.
+- Contrato de errores (`VALIDATION_ERROR` vs `VALIDATION_FAILED`), ruta de la prueba unitaria del mock (2.2), política del OTP en producción, SEC-06 (sin autenticación) y pago a uno mismo / saldo fijo: siguen abiertas según el borrador. Preguntar a Architect y PO.
 
 ---
 
-## 8. Revisión de seguridad (estado tras la ejecución)
+## 10. Checklist previo al Freeze
 
-| Control | Estado |
-|---|---|
-| SEC-01 a SEC-03 | NO EJECUTADO |
-| SEC-04, SEC-05 | NO EJECUTADO: la salida visible no incluye los casos hostiles |
-| SEC-06 | Riesgo pendiente (DR-05) |
-| SEC-07, SEC-08 | Fuera del alcance (W5) |
-| SEC-09 | Cumple: este informe cita solo lo que demuestra la salida |
+- [ ] Corregir BUG-01 y reejecutar `python tools/wallee.py test backend` con la salida completa.
+- [ ] Tests en verde y cobertura ≥ 85 % (aún sin dato).
+- [ ] Evidencia, commit y PR completados en la matriz (7.2).
+- [ ] README con secciones 6 y 7 honestas.
+- [ ] Publicación en la rama `qa-security`: paso separado, no confirmado aquí.
 
----
+**Aporte a README sección 6 "Evidencia y pruebas":** primera ejecución real: 18 pruebas visibles (14 fallidas, 2 superadas, 2 `todo`). Los fallos de W1 se deben a un 404 en `POST /onboarding`. El mock de identidad es MOCK. Ningún AC está verificado.
 
-## 9. Decisiones requeridas (vigentes)
-
-DECISIÓN REQUERIDA — Categoría: alto impacto | Contexto: W1-AC4 / W2-AC6 | Opciones: A) Exponer endpoints de eventos B) Pruebas unitarias del servicio de eventos C) Consulta directa a la tabla | Recomendación: A | Impacto: AC4 y AC6 sin prueba | Pregunta a: Architect y AI Engineer 1
-
-DECISIÓN REQUERIDA — Categoría: ambigüedad | Contexto: RN-10, código HTTP y de motivo de wallet no activa | Opciones: A) 403 `WALLET_NOT_ACTIVE` B) 409 C) 422 | Recomendación: A | Impacto: el test solo exige 4xx | Pregunta a: Product Owner humano / Architect
-
-DECISIÓN REQUERIDA — Categoría: ambigüedad | Contexto: W2-AC4-T3, pago a uno mismo | Opciones: A) Rechazar con `DESTINATION_INVALID` B) Permitir C) Fuera de alcance | Recomendación: A | Impacto: caso `it.todo` | Pregunta a: Product Owner humano
-
-DECISIÓN REQUERIDA — Categoría: alcance/ruta | Contexto: pruebas de frontend y unitarias fuera de `output_target_dir=backend` | Opciones: A) Ampliar el destino B) Las escriben los AI Engineers C) Quedan propuestas | Recomendación: A | Impacto: sin cobertura de frontend ni de unidades | Pregunta a: Architect
-
-DECISIÓN REQUERIDA — Categoría: crítica | Contexto: SEC-06, el pagador se identifica solo por `walletId` | Opciones: A) Aceptar riesgo B) IDs no secuenciales y comprobación de pertenencia C) Autenticación mínima | Recomendación: B como mínimo | Impacto: acceso a saldo y pago con wallet ajena | Pregunta a: Product Owner humano (escala al Architect)
-
-DECISIÓN REQUERIDA — Categoría: alcance/ruta | Contexto: la salida no demuestra que se ejecutaron mis archivos de QA | Opciones: A) La persona verifica que `w1-onboarding-qa.e2e-spec.ts`, `w2-pago-bajo-monto-qa.e2e-spec.ts` y `support/qa-helpers.ts` existen en `backend/test/` y reejecuta con salida completa B) Mantenerlos NO EJECUTADO | Recomendación: A | Impacto: sin esto no hay evidencia de W2 ni de la mayoría de W1 | Pregunta a: persona del equipo / Architect
-
----
-
-## 10. Siguiente paso
-
-1. El AI Engineer 1 confirma BUG-01: implementar o registrar `POST /onboarding` en `AppModule` (o exponer la configuración global).
-2. La persona verifica la presencia de mis archivos en `backend/test/` y vuelve a ejecutar `python tools/wallee.py test backend`, aportando la salida completa (sin truncar) para actualizar el informe.
-3. Hasta entonces, solo se consideran verificados los 14 fallos del archivo previo; todo lo demás permanece NO EJECUTADO.
+**Aporte a README sección 7 "Trade-offs":** no se probaron W2, UI, E2E, eventos, SEC-03/05 ni las herramientas de dependencias y secretos. La cobertura no se midió. La salida del ejecutor estaba truncada, lo que limita la trazabilidad por caso.
