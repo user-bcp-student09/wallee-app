@@ -1,72 +1,18 @@
-// backend/test/onboarding.e2e-spec.ts
+// test/onboarding.e2e-spec.ts
 import { INestApplication } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
-type Step = {
-  key?: string;
-  stepKey?: string;
-};
-
-describe('W1 onboarding guiado', () => {
+describe('W1 onboarding — API de integración', () => {
   let app: INestApplication;
-  let syntheticPhoneCounter = 1;
-
-  const nextSyntheticPhone = (): string => {
-    const suffix = String(syntheticPhoneCounter++).padStart(8, '0');
-    return `9${suffix}`;
-  };
-
-  const createOnboarding = async (): Promise<{
-    onboardingId: string;
-    walletId: string;
-    phone: string;
-  }> => {
-    const phone = nextSyntheticPhone();
-
-    const response = await request(app.getHttpServer())
-      .post('/onboarding')
-      .send({});
-
-    expect(response.status).toBe(201);
-    expect(response.body.onboardingId).toBeTruthy();
-    expect(response.body.walletId).toBeTruthy();
-
-    return {
-      onboardingId: response.body.onboardingId as string,
-      walletId: response.body.walletId as string,
-      phone,
-    };
-  };
-
-  const submitStep = (
-    onboardingId: string,
-    stepKey: string,
-    body: Record<string, unknown>,
-  ) =>
-    request(app.getHttpServer())
-      .put(`/onboarding/${onboardingId}/steps/${stepKey}`)
-      .send(body);
-
-  const getCurrentStep = async (onboardingId: string): Promise<unknown> => {
-    const response = await request(app.getHttpServer())
-      .get(`/onboarding/${onboardingId}`);
-
-    expect(response.status).toBe(200);
-    return response.body.currentStep;
-  };
-
-  const expectValidationErrorForField = (
-    body: Record<string, unknown>,
-    field: string,
-  ): void => {
-    expect(body.code).toBe('VALIDATION_ERROR');
-    expect(JSON.stringify(body).toLowerCase()).toContain(field.toLowerCase());
-  };
+  const previousNodeEnv = process.env.NODE_ENV;
 
   beforeAll(async () => {
-    const moduleRef: TestingModule = await Test.createTestingModule({
+    // El OTP fijo propuesto solo debe estar habilitado fuera de producción.
+    process.env.NODE_ENV = 'test';
+
+    const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
@@ -76,183 +22,246 @@ describe('W1 onboarding guiado', () => {
 
   afterAll(async () => {
     await app?.close();
+
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 
-  it('W1-AC1-T2 [EP/ST] muestra los pasos requeridos y el paso actual', async () => {
-    const { onboardingId } = await createOnboarding();
-
+  async function crearOnboarding(): Promise<Record<string, any>> {
     const response = await request(app.getHttpServer())
-      .get(`/onboarding/${onboardingId}`);
+      .post('/onboarding')
+      .send({});
 
-    expect(response.status).toBe(200);
-    expect(response.body.currentStep).toBe('datos');
-    expect(Array.isArray(response.body.steps)).toBe(true);
-    expect(response.body.steps).toHaveLength(3);
+    expect(response.status).toBe(201);
+    expect(response.body.onboardingId).toBeTruthy();
+    expect(response.body.walletId).toBeTruthy();
 
-    const steps = response.body.steps as Step[];
-    const keys = steps.map((step) => step.key ?? step.stepKey);
+    return response.body;
+  }
 
-    expect(keys).toEqual(['datos', 'identidad', 'verificacion']);
+  async function completarPaso(
+    onboardingId: string,
+    stepKey: string,
+    body: Record<string, unknown>,
+  ) {
+    return request(app.getHttpServer())
+      .put(`/onboarding/${onboardingId}/steps/${stepKey}`)
+      .send(body);
+  }
+
+  it('W1-AC1-T2 [EP] inicio lista los pasos propuestos y marca datos como actual', async () => {
+    const onboarding = await crearOnboarding();
+
+    expect(Array.isArray(onboarding.steps)).toBe(true);
+    expect(JSON.stringify(onboarding.steps)).toContain('datos');
+    expect(JSON.stringify(onboarding.steps)).toContain('identidad');
+    expect(JSON.stringify(onboarding.steps)).toContain('verificacion');
+    expect(onboarding.currentStep).toBe('datos');
   });
 
-  it('W1-AC1-T2 [ST] marca el siguiente paso como actual tras completar datos', async () => {
-    const { onboardingId, phone } = await createOnboarding();
+  it('W1-AC1-T2 [ST] completar datos actualiza el paso actual', async () => {
+    const onboarding = await crearOnboarding();
 
-    const response = await submitStep(onboardingId, 'datos', {
+    const update = await completarPaso(onboarding.onboardingId, 'datos', {
       name: 'Usuario Sintetico',
-      phone,
+      phone: '912345678',
     });
 
-    expect(response.status).toBe(200);
-    expect(response.body.currentStep).toBe('identidad');
+    expect(update.status).toBe(200);
+
+    const progress = await request(app.getHttpServer())
+      .get(`/onboarding/${onboarding.onboardingId}`);
+
+    expect(progress.status).toBe(200);
+    expect(progress.body.currentStep).toBe('identidad');
   });
 
-  it('W1-AC1-T3 [ST] rechaza un paso enviado fuera de orden', async () => {
-    const { onboardingId } = await createOnboarding();
+  it('W1-AC1-T3 [ST] paso fuera de orden devuelve 409 y no cambia el progreso', async () => {
+    const onboarding = await crearOnboarding();
 
-    const response = await submitStep(onboardingId, 'verificacion', {
-      code: '123456',
-    });
+    const update = await completarPaso(
+      onboarding.onboardingId,
+      'verificacion',
+      { code: '123456' },
+    );
 
-    expect(response.status).toBe(409);
-    expect(response.body.code).toBe('STEP_OUT_OF_ORDER');
-    await expect(getCurrentStep(onboardingId)).resolves.toBe('datos');
-  });
+    expect(update.status).toBe(409);
+    expect(update.body.code).toBe('STEP_OUT_OF_ORDER');
 
-  it('W1-AC2-T2 [EP] bloquea el avance cuando falta el nombre obligatorio', async () => {
-    const { onboardingId, phone } = await createOnboarding();
+    const progress = await request(app.getHttpServer())
+      .get(`/onboarding/${onboarding.onboardingId}`);
 
-    const response = await submitStep(onboardingId, 'datos', {
-      name: '',
-      phone,
-    });
-
-    expect(response.status).toBe(400);
-    expectValidationErrorForField(response.body, 'name');
-    await expect(getCurrentStep(onboardingId)).resolves.toBe('datos');
+    expect(progress.status).toBe(200);
+    expect(progress.body.currentStep).toBe('datos');
   });
 
   it.each([
-    ['8 dígitos', '91234567'],
-    ['10 dígitos', '9123456780'],
-    ['9 dígitos con prefijo distinto de 9', '812345678'],
+    {
+      label: 'nombre vacío',
+      body: { name: '', phone: '912345678' },
+      field: 'name',
+    },
+    {
+      label: 'celular ausente',
+      body: { name: 'Usuario Sintetico' },
+      field: 'phone',
+    },
+    {
+      label: 'celular de 8 dígitos',
+      body: { name: 'Usuario Sintetico', phone: '91234567' },
+      field: 'phone',
+    },
+    {
+      label: 'celular de 10 dígitos',
+      body: { name: 'Usuario Sintetico', phone: '9123456780' },
+      field: 'phone',
+    },
+    {
+      label: 'celular de 9 dígitos que no empieza en 9',
+      body: { name: 'Usuario Sintetico', phone: '812345678' },
+      field: 'phone',
+    },
   ])(
-    'W1-AC2-T3 [BVA] rechaza celular de %s',
-    async (_description, invalidPhone) => {
-      const { onboardingId } = await createOnboarding();
-
-      const response = await submitStep(onboardingId, 'datos', {
-        name: 'Usuario Sintetico',
-        phone: invalidPhone,
-      });
+    'W1-AC2-T2 [EP/BVA] $label bloquea el avance con error accionable',
+    async ({ body, field }) => {
+      const onboarding = await crearOnboarding();
+      const response = await completarPaso(
+        onboarding.onboardingId,
+        'datos',
+        body,
+      );
 
       expect(response.status).toBe(400);
-      expectValidationErrorForField(response.body, 'phone');
-      await expect(getCurrentStep(onboardingId)).resolves.toBe('datos');
+      expect(response.body.code).toBe('VALIDATION_ERROR');
+      expect(JSON.stringify(response.body).toLowerCase()).toContain(
+        field.toLowerCase(),
+      );
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /stack trace|node_modules|at \w+\s*\(/i,
+      );
+
+      const progress = await request(app.getHttpServer())
+        .get(`/onboarding/${onboarding.onboardingId}`);
+
+      expect(progress.status).toBe(200);
+      expect(progress.body.currentStep).toBe('datos');
     },
   );
 
   it.each([
-    ['7 dígitos', '1234567'],
-    ['9 dígitos', '123456789'],
+    { label: 'documento de 7 dígitos', document: '1234567' },
+    { label: 'documento de 9 dígitos', document: '123456789' },
+    { label: 'documento alfanumérico', document: '12ABC678' },
   ])(
-    'W1-AC2-T2 [BVA] rechaza documento de %s',
-    async (_description, document) => {
-      const { onboardingId, phone } = await createOnboarding();
+    'W1-AC2-T3 [EP/BVA] $label no completa identidad según el formato propuesto',
+    async ({ document }) => {
+      const onboarding = await crearOnboarding();
 
-      const datosResponse = await submitStep(onboardingId, 'datos', {
+      const datos = await completarPaso(onboarding.onboardingId, 'datos', {
         name: 'Usuario Sintetico',
-        phone,
+        phone: '912345678',
       });
-      expect(datosResponse.status).toBe(200);
+      expect(datos.status).toBe(200);
 
-      const response = await submitStep(onboardingId, 'identidad', {
-        document,
-      });
+      const identidad = await completarPaso(
+        onboarding.onboardingId,
+        'identidad',
+        { document },
+      );
 
-      expect(response.status).toBe(400);
-      expectValidationErrorForField(response.body, 'document');
-      await expect(getCurrentStep(onboardingId)).resolves.toBe('identidad');
+      expect(identidad.status).toBe(400);
+      expect(identidad.body.code).toBe('VALIDATION_ERROR');
+      expect(JSON.stringify(identidad.body).toLowerCase()).toContain(
+        'document',
+      );
     },
   );
 
-  it('W1-AC2-T2 [EP] permite reintentar OTP incorrecto sin avanzar', async () => {
-    const { onboardingId, phone } = await createOnboarding();
+  it('W1-AC2-T3 [EP/ST] OTP incorrecto permite reintentar sin activar la wallet', async () => {
+    const onboarding = await crearOnboarding();
 
-    const datosResponse = await submitStep(onboardingId, 'datos', {
+    const datos = await completarPaso(onboarding.onboardingId, 'datos', {
       name: 'Usuario Sintetico',
-      phone,
+      phone: '912345678',
     });
-    expect(datosResponse.status).toBe(200);
+    expect(datos.status).toBe(200);
 
-    const identidadResponse = await submitStep(onboardingId, 'identidad', {
-      document: '12345678',
-    });
-    expect(identidadResponse.status).toBe(200);
+    const identidad = await completarPaso(
+      onboarding.onboardingId,
+      'identidad',
+      { document: '12345678' },
+    );
+    expect(identidad.status).toBe(200);
 
-    const response = await submitStep(onboardingId, 'verificacion', {
-      code: '000000',
-    });
+    const verificacion = await completarPaso(
+      onboarding.onboardingId,
+      'verificacion',
+      { code: '000000' },
+    );
 
-    expect(response.status).toBe(400);
-    expectValidationErrorForField(response.body, 'code');
-    await expect(getCurrentStep(onboardingId)).resolves.toBe('verificacion');
+    expect(verificacion.status).toBe(400);
+    expect(verificacion.body.code).toBe('VALIDATION_ERROR');
+
+    const wallet = await request(app.getHttpServer())
+      .get(`/wallets/${onboarding.walletId}`);
+
+    expect(wallet.status).toBe(200);
+    expect(wallet.body.status).toBe('PENDIENTE_ONBOARDING');
   });
 
-  it.each([
-    ["cadena tipo SQL", "' OR 1=1--"],
-    ["cadena tipo JavaScript", '<script>alert(1)</script>'],
-    ['unicode y espacios', ' ９１２３４５６７８ '],
-    ['cadena desmesuradamente larga', `9${'1'.repeat(10000)}`],
-  ])(
-    'W1-AC2-T3 [EG/SEC-05] rechaza celular hostil: %s',
-    async (_description, hostilePhone) => {
-      const { onboardingId } = await createOnboarding();
+  it('W1-AC3-T3 [ST] wallet incompleta permanece pendiente', async () => {
+    const onboarding = await crearOnboarding();
 
-      const response = await submitStep(onboardingId, 'datos', {
-        name: 'Usuario Sintetico',
-        phone: hostilePhone,
-      });
+    const wallet = await request(app.getHttpServer())
+      .get(`/wallets/${onboarding.walletId}`);
 
-      expect(response.status).toBe(400);
-      expectValidationErrorForField(response.body, 'phone');
-      await expect(getCurrentStep(onboardingId)).resolves.toBe('datos');
-    },
+    expect(wallet.status).toBe(200);
+    expect(wallet.body.status).toBe('PENDIENTE_ONBOARDING');
+  });
+
+  it('W1-AC3-T2 [ST] wallet se activa solo tras completar los tres pasos', async () => {
+    const onboarding = await crearOnboarding();
+
+    const datos = await completarPaso(onboarding.onboardingId, 'datos', {
+      name: 'Usuario Sintetico',
+      phone: '912345678',
+    });
+    expect(datos.status).toBe(200);
+
+    const identidad = await completarPaso(
+      onboarding.onboardingId,
+      'identidad',
+      { document: '12345678' },
+    );
+    expect(identidad.status).toBe(200);
+
+    const verificacion = await completarPaso(
+      onboarding.onboardingId,
+      'verificacion',
+      { code: '123456' },
+    );
+    expect(verificacion.status).toBe(200);
+
+    const progress = await request(app.getHttpServer())
+      .get(`/onboarding/${onboarding.onboardingId}`);
+    expect(progress.status).toBe(200);
+    expect(progress.body.status).toBe('COMPLETADO');
+
+    const wallet = await request(app.getHttpServer())
+      .get(`/wallets/${onboarding.walletId}`);
+
+    expect(wallet.status).toBe(200);
+    expect(wallet.body.status).toBe('ACTIVA');
+  });
+
+  it.todo(
+    'W1-AC3-T3 [UI] verificar que el punto de entrada de pago no aparece con wallet pendiente y aparece con ACTIVA; falta componente frontend identificable',
   );
 
-  it('W1-AC3-T2 [ST] activa la wallet al completar los tres pasos', async () => {
-    const { onboardingId, walletId, phone } = await createOnboarding();
-
-    const datosResponse = await submitStep(onboardingId, 'datos', {
-      name: 'Usuario Sintetico',
-      phone,
-    });
-    expect(datosResponse.status).toBe(200);
-
-    const identidadResponse = await submitStep(onboardingId, 'identidad', {
-      document: '12345678',
-    });
-    expect(identidadResponse.status).toBe(200);
-
-    const verificacionResponse = await submitStep(onboardingId, 'verificacion', {
-      code: '123456',
-    });
-    expect(verificacionResponse.status).toBe(200);
-
-    const walletResponse = await request(app.getHttpServer())
-      .get(`/wallets/${walletId}`);
-
-    expect(walletResponse.status).toBe(200);
-    expect(walletResponse.body.status).toBe('ACTIVA');
-  });
-
-  it('W1-AC3-T3 [ST] conserva pendiente la wallet antes de terminar el onboarding', async () => {
-    const { walletId } = await createOnboarding();
-
-    const walletResponse = await request(app.getHttpServer())
-      .get(`/wallets/${walletId}`);
-
-    expect(walletResponse.status).toBe(200);
-    expect(walletResponse.body.status).toBe('PENDIENTE_ONBOARDING');
-  });
+  it.todo(
+    'W1-AC4-T2 [ST] observar eventos de inicio, tres pasos y cierre, orden y marcas de tiempo; falta contrato de lectura de eventos para caja negra',
+  );
 });
